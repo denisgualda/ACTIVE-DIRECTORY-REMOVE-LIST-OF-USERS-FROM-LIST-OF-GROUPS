@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>ESBORRA LLISTAT D'USUARIS LLISTAT DE GRUPS</title>
+
+	<HTA:APPLICATION
+	APPLICATIONNAME = "LLISTA D'ELEMENTS"
+	id="LLISTA D'ELEMENTS"
+	name="LLISTA D'ELEMENTS"
+	WINDOWSTATE="maximize"
+	/>
+	
+	<script language="vbscript">
+
+		on error resume next
+		Const ForWriting = 0
+
+		Dim objFSO1, objFSO2, txtLlistatUsuaris, txtLlisatGrups
+
+
+		
+
+	
+'INICI BOTO EXECUTA------------'
+	Sub Executa
+
+		txt_sortida.value=""
+		'FITXER TEMPORALS DE LECTURA DE LES CAIXES DE TEXT ---------------------'
+		txtLlistatUsuaris = "llistatUsuaris.txt"
+		txtLlisatGrups = "llistatGrups.txt"
+
+		'CREA FITXER  PER LLISTAT DE GRUPS'
+		Set objFSO1 = CreateObject("Scripting.FileSystemObject")
+		Set objLlistatGrups = objFSO1.OpenTextFile(txtLlisatGrups,2, true) 
+		Set objShell1 = CreateObject("WScript.Shell")
+
+		'CREA FITXER  PER LLISTAT DUSUARIS'
+		Set objFSO2 = CreateObject("Scripting.FileSystemObject")
+		Set objLlistatUsuaris = objFSO1.OpenTextFile(txtLlistatUsuaris,2, true)
+		Set objShell2 = CreateObject("WScript.Shell")
+		'-----------------------------------------------------------------------'
+
+
+
+		'ESCRIU FITXER TEMPORAL PER LLISAT DUSUARIS'
+		strTextLlistatUsuaris = text1.value
+		objLlistatUsuaris.Write strTextLlistatUsuaris & VBCrlf
+
+
+		'ESCRIU FITXER TEMPORAL PER LLISTAT DE GRUPS'
+		strTextLlistatGrups = text2.value
+		objLlistatGrups.Write strTextLlistatGrups & VBCrlf
+		
+	
+
+		'LECTURA FITXER LLISTAT DE GRUPS'
+		Set objFso = CreateObject("Scripting.FileSystemObject")
+		Set objLlistatGrups= objFSO.OpenTextFile(txtLlisatGrups, 1)
+
+		'LECTURA FITXER LLITAT DUSUARIS'
+		Set objFso = CreateObject("Scripting.FileSystemObject")
+		Set objLlistatUsuaris= objFSO.OpenTextFile(txtLlistatUsuaris, 1)
+
+
+'***************************************************************************************************'
+' INFORMACIO PER CRIDAR LA FUNCIO GetUserDN  --> Obtenir Distingueshed name d'usuari i grup		  '|'
+																								  '|'
+Set objSystemInfo = CreateObject("ADSystemInfo") 												  '|'	
+strDomain = objSystemInfo.DomainShortName														  '|'	
+'***************************************************************************************************'
+Set objRootLDAP = GetObject("LDAP://RootDSE")
+
+'CREA UN ARRAY AMB EL LLISTAT DUSUARIS'
+usuaris = Split(CreateObject("Scripting.FileSystemObject").OpenTextFile(txtLlistatUsuaris, 1).ReadAll, vbcrlf)
+
+
+		'LLEGIR LLISTAT DE GRUPS  --------- ' 
+
+			Do while Not objLlistatGrups.AtEndOfStream
+				grup =  objLlistatGrups.readline
+				grup_path = GetUserDN(grup,strDomain)
+				strGrup = "LDAP://" & grup_path
+				grup_path = strGrup
+				resultat_sortida = resultat_sortida & "GRUP: " & grup_path & VBCrlf
+
+				'RECORRE usuaris PER GUARDAR CADA LINIA EN EL GRUP'
+				For i = 0 to uBound(usuaris)-1
+					usuari = usuaris(i)
+					userPath = GetUserDN(usuari,strDomain)
+					strUser = "LDAP://" & userPath
+					userPath = strUser
+
+
+
+					if IsMember(strDomain,usuari,grup) Then
+						removeFromGroup userPath,grup_path
+						resultat_sortida = resultat_sortida & usuari &  VBCrlf
+
+				    else
+				    
+				    resultat_sortida = resultat_sortida & usuari & " Usuari no forma part del grup" & VBCrlf
+
+
+				   	End if
+
+				Next
+			Loop
+
+			resultat_sortida = resultat_sortida & VBCrlf
+			resultat_sortida = resultat_sortida & "--------------------------------------" & VBCrlf
+			resultat_sortida = resultat_sortida & "FINALITZAT ESBORRA USUARIS DELS GRUPS" & VBCrlf
+			resultat_sortida = resultat_sortida & "--------------------------------------" & VBCrlf
+
+
+			txt_sortida.value = resultat_sortida
+
+			objLlistatGrups.close
+			objLlistatUsuaris.Close
+			neteja_fitxer("llistatGrups.txt")
+			neteja_fitxer("llistatUsuaris.txt")
+		End Sub
+		'FI BOTO EXECUTA'
+
+
+
+
+
+'FUNCIO OBTENIR Distingueshed NAME'
+Function GetUserDN(byval strUserName,byval strDomain)	
+	Set objTrans = CreateObject("NameTranslate")
+	objTrans.Init 1, strDomain
+	objTrans.Set 3, strDomain & "\" & strUserName 
+	strUserDN = objTrans.Get(1) 
+	GetUserDN = strUserDN	
+end function
+'-------------------------------------'
+
+
+'FUNCIO ESBORRA USUARI DE GRUP'
+Function removeFromGroup(userPath, groupPath)
+
+	dim objGroup
+	set objGroup = getobject(groupPath)
+	
+	for each member in objGroup.members
+		if lcase(member.adspath) = lcase(userPath) then
+			objGroup.Remove(userPath)
+			exit function
+		end if
+	next
+end Function
+'-------------------------------------'
+
+
+'FUNCIO COMPROVA SI USUARI FORMA PART DEL GRUP'
+Function IsMember(domainName,userName,groupName)
+   Set groupListD = CreateObject("Scripting.Dictionary")
+   groupListD.CompareMode = 1
+   ADSPath = domainName & "/" & userName
+   Set objUser = GetObject("WinNT://" & ADSPath & ",user")
+   For Each objGroup in objUser.Groups
+      groupListD.Add objGroup.Name, "-"
+   Next
+   IsMember = CBool(groupListD.Exists(groupName))
+End Function
+'-------------------------------------'
+
+
+'FUNCIO NETEJA FITXER'
+function neteja_fitxer(fitxer)
+	strFileName = fitxer
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	Set objFile = objFSO.OpenTextFile(strFileName, 2, true)
+	Set objShell = CreateObject("WScript.Shell")
+	objFile.Write ""
+end function
+'-------------------------------------'
+
+
+	</script>
+	
+</head>
+
+<body>
+	<h1>ESBORRA LLISTAT D'USUARIS DE LLISTAT DE GRUPS</h1>
+	 <div style="float: left; width: 50%">
+	<h2>LLISTAT USUARIS</h2> 
+</div>
+<h2>LLISTAT DE GRUPS</h2>
+	<textarea name="text1" id="TextFile" rows="30" cols="70"></textarea> - <textarea name="text2" id="TextFile" rows="30" cols="70"></textarea>  
+	<br>
+	<br>
+	<input type="button" value="    Esborra Usuaris dels Grups    " onclick="Executa"></br>
+	<br>
+
+	<!-- CAIXA TEXT RESULTAT -->
+	<textarea name="txt_sortida" rows=30  cols=145> </textarea>
+	<br>
+
+	
+</body>
+
+</html>
