@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>ESBORRA LLISTAT D'USUARIS LLISTAT DE GRUPS</title>
+
+	<HTA:APPLICATION
+	APPLICATIONNAME = "LLISTA D'ELEMENTS"
+	id="LLISTA D'ELEMENTS"
+	name="LLISTA D'ELEMENTS"
+	WINDOWSTATE="maximize"
+	/>
+	
+	<script language="vbscript">
+
+		on error resume next
+		Const ForWriting = 0
+
+		Dim objFSO1, objFSO2, txtLlistatUsuaris, txtLlisatGrups
+
+'INICI BOTO EXECUTA------------'
+Sub Executa
+
+		'LLEGIR LLISTAT DUSUARIS DEL TEXTBOX (text1) I GUARDAR-LOS TOTS EN UNA UNICA VARIABLE llistatUsuaris .. Posteriorment es guardaran en array usuaris'
+		strTextUsuaris = text1.value
+		arrLines = Split(strTextUsuaris, vbCrLf)
+		For Each strLine in arrLines
+			llistatUsuaris = llistatUsuaris + strLine + vbCrLf
+		Next
+				
+'***************************************************************************************************'
+' INFORMACIO PER CRIDAR LA FUNCIO GetUserDN  --> Obtenir Distingueshed name dusuari i grup		    |'
+																								  									'|'
+Set objSystemInfo = CreateObject("ADSystemInfo") 												  					'|'	
+strDomain = objSystemInfo.DomainShortName														  						'|'	
+'***************************************************************************************************'
+Set objRootLDAP = GetObject("LDAP://RootDSE")
+
+'CREA UN ARRAY AMB EL LLISTAT DUSUARIS'
+usuaris = Split(llistatUsuaris,vbCrLf)
+
+		'LLEGIR LLISTAT DE GRUPS  --------- '
+			strTextGrups = text2.value
+			arrLines = Split(strTextGrups, vbCrLf)
+			For Each strLine in arrLines
+				grup = strLine
+				
+				grup_path = GetUserDN(grup,strDomain)
+				strGrup = "LDAP://" & grup_path
+				grup_path = strGrup
+				resultat_sortida = resultat_sortida & "GRUP: " & grup_path & VBCrlf
+
+				'RECORRE usuaris PER GUARDAR CADA LINIA EN EL GRUP'
+				For i = 0 to uBound(usuaris)-1
+					usuari = usuaris(i)
+					userPath = GetUserDN(usuari,strDomain)
+					strUser = "LDAP://" & userPath
+					userPath = strUser
+
+
+
+					if IsMember(strDomain,usuari,grup) Then
+						removeFromGroup userPath,grup_path
+						resultat_sortida = resultat_sortida & usuari &  VBCrlf
+
+				    else
+				    
+				    resultat_sortida = resultat_sortida & usuari & " Usuari no forma part del grup" & VBCrlf
+
+
+				   	End if
+
+				Next
+			Next
+
+			resultat_sortida = resultat_sortida & VBCrlf
+			resultat_sortida = resultat_sortida & "--------------------------------------" & VBCrlf
+			resultat_sortida = resultat_sortida & "FINALITZAT ESBORRA USUARIS DELS GRUPS" & VBCrlf
+			resultat_sortida = resultat_sortida & "--------------------------------------" & VBCrlf
+
+
+			txt_sortida.value = resultat_sortida
+End Sub
+'FI BOTO EXECUTA'
+
+
+
+
+
+'FUNCIO OBTENIR Distingueshed NAME'
+Function GetUserDN(byval strUserName,byval strDomain)	
+	Set objTrans = CreateObject("NameTranslate")
+	objTrans.Init 1, strDomain
+	objTrans.Set 3, strDomain & "\" & strUserName 
+	strUserDN = objTrans.Get(1) 
+	GetUserDN = strUserDN	
+end function
+'-------------------------------------'
+
+
+'FUNCIO ESBORRA USUARI DE GRUP'
+Function removeFromGroup(userPath, groupPath)
+
+	dim objGroup
+	set objGroup = getobject(groupPath)
+	
+	for each member in objGroup.members
+		if lcase(member.adspath) = lcase(userPath) then
+			objGroup.Remove(userPath)
+			exit function
+		end if
+	next
+end Function
+'-------------------------------------'
+
+
+'FUNCIO COMPROVA SI USUARI FORMA PART DEL GRUP'
+Function IsMember(domainName,userName,groupName)
+   Set groupListD = CreateObject("Scripting.Dictionary")
+   groupListD.CompareMode = 1
+   ADSPath = domainName & "/" & userName
+   Set objUser = GetObject("WinNT://" & ADSPath & ",user")
+   For Each objGroup in objUser.Groups
+      groupListD.Add objGroup.Name, "-"
+   Next
+   IsMember = CBool(groupListD.Exists(groupName))
+End Function
+'-------------------------------------'
+
+
+</script>
+	
+</head>
+
+<body>
+	<h1>ESBORRA LLISTAT D'USUARIS DE LLISTAT DE GRUPS</h1>
+	 <div style="float: left; width: 50%">
+	<h2>LLISTAT USUARIS</h2> 
+</div>
+<h2>LLISTAT DE GRUPS</h2>
+	<textarea name="text1" id="TextFile" rows="30" cols="70"></textarea> - <textarea name="text2" id="TextFile" rows="30" cols="70"></textarea>  
+	<br>
+	<br>
+	<input type="button" value="    Esborra Usuaris dels Grups    " onclick="Executa"></br>
+	<br>
+
+	<!-- CAIXA TEXT RESULTAT -->
+	<textarea name="txt_sortida" rows=30  cols=145> </textarea>
+	<br>
+
+	
+</body>
+
+</html>
